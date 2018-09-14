@@ -2,10 +2,25 @@ const { ApolloServer } = require('apollo-server');
 const uuidv4 = require('uuid/v4');
 
 const typeDefs = `
+  enum PhotoCategory {
+    SELFIE
+    PORTRAIT
+    ACTION
+    LANDSCAPE
+    GRAPHIC
+  }
+
   type Photo {
     id: ID!
     url: String!
     name: String!
+    description: String
+    category: PhotoCategory!
+  }
+
+  input PostPhotoInput {
+    name: String!
+    category: PhotoCategory=PORTRAIT
     description: String
   }
 
@@ -15,7 +30,7 @@ const typeDefs = `
   }
 
   type Mutation {
-    postPhoto(name: String! description: String): Photo!
+    postPhoto(input: PostPhotoInput): Photo!
   }
 `;
 
@@ -28,7 +43,7 @@ const resolvers = {
   },
   Mutation: {
     postPhoto(parent, args) {
-      var newPhoto = { id: uuidv4(), ...args };
+      var newPhoto = { id: uuidv4(), ...args.input };
       photos.push(newPhoto);
       return newPhoto;
     }
