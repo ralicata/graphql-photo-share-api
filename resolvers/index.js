@@ -1,7 +1,7 @@
-import uuidv4 from 'uuid/v4';
 import { GraphQLScalarType } from 'graphql';
 import { ObjectID } from 'mongodb';
 import { authorizeWithGithub } from '../lib';
+import fetch from 'node-fetch';
 
 ObjectID.prototype.valueOf = function() {
   return this.toString();
@@ -90,6 +90,35 @@ const resolvers = {
         .replaceOne({ githubLogin: login }, latestUserInfo, { upsert: true });
 
       return { user, token: access_token };
+    },
+    addFakeUser: async (parent, { count }, { db }) => {
+      var randomUserAPI = `https://randomuser.me/api/?results=${count}`;
+
+      var { results } = await fetch(randomUserAPI).then(res => res.json());
+
+      var users = results.map(r => ({
+        githubLogin: r.login.username,
+        name: `${r.name.first} ${r.name.last}`,
+        avatar: r.picture.thumbnail,
+        githubToken: r.login.sha1
+      }));
+
+      await db.collection('users').insert(users);
+
+      return users;
+    },
+
+    async fakeUserAuth(_, { githubLogin }, { db }) {
+      var user = await db.collection('users').findOne({ githubLogin });
+
+      if (!user) {
+        throw new Error(`Cannot find user with githubLogin ${githubLogin}`);
+      }
+
+      return {
+        token: user.githubToken,
+        user
+      };
     }
   },
   Photo: {
