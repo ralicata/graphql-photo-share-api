@@ -27,6 +27,11 @@ type Photo {
   created: DateTime!
 }
 
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
 input PostPhotoInput {
   name: String!
   category: PhotoCategory = PORTRAIT
@@ -36,8 +41,13 @@ input PostPhotoInput {
 type Query {
   totalPhotos: Int!
   allPhotos: [Photo!]!
+  totalUsers: Int!
+  allUsers: [User!]!
+  me: User!
 }
 
 type Mutation {
   postPhoto(input: PostPhotoInput): Photo!
+  githubAuth(code: String!): AuthPayload!
+  addFakeUser(count: Int = 1): [User!]!
 }

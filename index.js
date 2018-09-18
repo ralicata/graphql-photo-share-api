@@ -1,30 +1,46 @@
-const { ApolloServer } = require('apollo-server-express');
-const express = require('express');
-const resolvers = require('./resolvers');
-const expressPlayground = require('graphql-playground-middleware-express')
-  .default;
-const { readFileSync } = require('fs');
-const typeDefs = readFileSync('./typeDefs.graphql', 'UTF-8');
+import { ApolloServer } from 'apollo-server-express';
+import express from 'express';
+import { default as expressPlayground } from 'graphql-playground-middleware-express';
+import { MongoClient } from 'mongodb';
+import { readFileSync } from 'fs';
 
-const { MongoClient } = require('mongodb');
+import resolvers from './resolvers';
+import { requestGithubToken } from './lib';
 
 require('dotenv').config();
+
+const typeDefs = readFileSync('./typeDefs.graphql', 'UTF-8');
 
 async function start() {
   const app = express();
   const MONGO_DB = process.env.DB_HOST;
-  const client = await MongoClient.connect(
-    MONGO_DB,
-    { useNewUrlParser: true }
-  );
 
-  const db = client.db();
-  const context = { db };
+  let db;
+
+  try {
+    const client = await MongoClient.connect(
+      MONGO_DB,
+      { useNewUrlParser: true }
+    );
+    db = client.db();
+    console.log('DB connected');
+  } catch (error) {
+    console.log(`
+      Mongo DB Host not found!
+      please add DB_HOST environment variable to .env file
+      exiting...
+    `);
+    process.exit(1);
+  }
 
   const server = new ApolloServer({
     typeDefs,
     resolvers,
-    context
+    context: async ({ req }) => {
+      const githubToken = req.headers.authorization;
+      const currentUser = await db.collection('users').findOne({ githubToken });
+      return { db, currentUser };
+    }
   });
   server.applyMiddleware({ app });
 

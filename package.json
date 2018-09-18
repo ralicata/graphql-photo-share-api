@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon -e js, json, graphql"
+    "start": "nodemon --exec babel-node index.js"
   },
   "keywords": [],
   "author": "",
@@ -19,5 +19,11 @@
     "mongodb": "^3.1.6",
     "nodemon": "^1.18.4",
     "uuid": "^3.3.2"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-latest": "^6.24.1"
   }
 }

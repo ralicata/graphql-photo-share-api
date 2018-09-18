@@ -1,36 +1,16 @@
-const uuidv4 = require('uuid/v4');
-const { GraphQLScalarType } = require('graphql');
+import uuidv4 from 'uuid/v4';
+import { GraphQLScalarType } from 'graphql';
+import { ObjectID } from 'mongodb';
+import { authorizeWithGithub } from '../lib';
+
+ObjectID.prototype.valueOf = function() {
+  return this.toString();
+};
 
 var users = [
   { githubLogin: 'mHattrup', name: 'Mike Hattrup' },
   { githubLogin: 'gPlake', name: 'Glen Plake' },
   { githubLogin: 'sSchmidt', name: 'Scot Schmidt' }
-];
-
-var photos = [
-  {
-    id: '1',
-    name: 'Dropping the Heart Chute',
-    description: 'The heart chute is one of my favorite chutes',
-    category: 'ACTION',
-    githubUser: 'gPlake',
-    created: '3-28-1977'
-  },
-  {
-    id: '2',
-    name: 'Enjoying the sunshine',
-    category: 'SELFIE',
-    githubUser: 'sSchmidt',
-    created: '1-2-1985'
-  },
-  {
-    id: '3',
-    name: 'Gunbarrel 25',
-    description: '25 laps on gunbarrel today',
-    category: 'LANDSCAPE',
-    githubUser: 'sSchmidt',
-    created: '2018-04-15T19:09:57.308Z'
-  }
 ];
 
 var tags = [
@@ -42,20 +22,81 @@ var tags = [
 
 const resolvers = {
   Query: {
-    totalPhotos: () => photos.length,
-    allPhotos: () => photos
+    totalPhotos: async (parent, args, { db }) => {
+      return await db.collection('photos').estimatedDocumentCount();
+    },
+    allPhotos: async (parent, args, { db }) => {
+      return await db
+        .collection('photos')
+        .find()
+        .toArray();
+    },
+
+    totalUsers: async (parent, args, { db }) => {
+      return await db.collection('users').estimatedDocumentCount();
+    },
+    allUsers: async (parent, args, { db }) => {
+      return await db
+        .collection('users')
+        .find()
+        .toArray();
+    },
+    me: (parent, args, { currentUser }) => currentUser
   },
   Mutation: {
-    postPhoto(parent, args) {
-      var newPhoto = { id: uuidv4(), ...args.input, created: new Date() };
-      photos.push(newPhoto);
+    async postPhoto(parent, args, { db, currentUser }) {
+      if (!currentUser) {
+        throw new Error('You must be authorized');
+      }
+
+      var newPhoto = {
+        ...args.input,
+        userID: currentUser.githubLogin,
+        created: new Date()
+      };
+      const { insertId } = await db.collection('photos').insertOne(newPhoto);
+      newPhoto.id = insertId;
+      console.log(newPhoto);
       return newPhoto;
+    },
+    async githubAuth(parent, { code }, { db }) {
+      let {
+        message,
+        access_token,
+        avatar_url,
+        login,
+        name
+      } = await authorizeWithGithub({
+        client_id: process.env.CLIENT_ID,
+        client_secret: process.env.CLIENT_SECRET,
+        code
+      });
+
+      if (message) {
+        throw new Error(message);
+      }
+
+      let latestUserInfo = {
+        name,
+        githubLogin: login,
+        githubToken: access_token,
+        avatar: avatar_url
+      };
+
+      const {
+        ops: [user]
+      } = await db
+        .collection('users')
+        .replaceOne({ githubLogin: login }, latestUserInfo, { upsert: true });
+
+      return { user, token: access_token };
     }
   },
   Photo: {
-    url: parent => `http://localhost:4000/img/${parent.id}.jpg`,
-    postedBy: parent => {
-      return users.find(u => u.githubLogin === parent.githubUser);
+    id: parent => parent.id || parent._id,
+    url: parent => `http://localhost:4000/img/${parent._id}.jpg`,
+    postedBy: (parent, args, { db }) => {
+      return db.collection('users').findOne({ githubLogin: parent.userID });
     },
     taggedUsers: parent =>
       tags
